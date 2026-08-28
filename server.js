@@ -18,7 +18,7 @@ let feedbackList = [];
 
 // STAFF ACCOUNTS
 let staffAccounts = {
-    admin: { username: "jamesadmin123", password: "119105" },
+    admin: { username: "jamesadmin123", password: "secureadminpassword" },
     mods: [
         { id: 1, username: "mod_cebu1", password: "modpass111", status: "Active" },
         { id: 2, username: "mod_cebu2", password: "modpass222", status: "Active" },
