@@ -11,6 +11,22 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Custom Neon Theme Styles -->
   <link rel="stylesheet" href="style.css">
+  <style>
+      .message-bubble { transition: transform 0.2s ease; }
+      .reaction-menu {
+          display: none;
+          position: absolute;
+          bottom: 100%;
+          background: #18181b;
+          border: 1px solid #27272a;
+          border-radius: 9999px;
+          padding: 2px 6px;
+          gap: 4px;
+          z-index: 20;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+      }
+      .message-bubble:hover .reaction-menu { display: flex; }
+  </style>
 </head>
 <body class="bg-black text-slate-100 font-sans antialiased h-screen overflow-hidden flex flex-col">
 
@@ -25,7 +41,7 @@
         <p class="text-xs text-emerald-500/80 font-mono mt-1">CEBU CAMPUS TEXT DIRECT</p>
       </div>
 
-      <form id="setupForm" class="space-y-5">
+      <form id="setupForm" class="space-y-4">
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">Nickname <span class="text-zinc-500 font-normal lowercase">(no emojis allowed)</span></label>
           <input type="text" id="nicknameInput" required placeholder="e.g., SugboKing" 
@@ -33,7 +49,7 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">Your University</label>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">Your University / Campus</label>
           <select id="schoolSelect" required 
             class="w-full px-4 py-3 bg-zinc-900/90 border border-zinc-800 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-200 text-sm max-h-48 overflow-y-auto">
             <option value="" disabled selected>Select Cebu Campus...</option>
@@ -79,13 +95,13 @@
 
         <div class="flex items-center gap-2 pt-1">
           <input type="checkbox" id="adminToggle" onchange="toggleAdminPasswordBox()" class="accent-emerald-500 h-4 w-4 rounded border-zinc-800 bg-zinc-900">
-          <label for="adminToggle" class="text-xs text-zinc-400 select-none">Log in as <span class="text-emerald-400 font-bold">Admin Account</span></label>
+          <label for="adminToggle" class="text-xs text-zinc-400 select-none">Join with <span class="text-amber-400 font-bold">Staff Badge (Admin/Mod Password)</span></label>
         </div>
 
         <div id="adminPasswordContainer" class="hidden space-y-2 pt-1">
-          <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400">Admin Secret Password</label>
-          <input type="password" id="adminPasswordInput" placeholder="Enter admin password..." 
-            class="w-full px-4 py-3 bg-zinc-900/90 border border-emerald-500/50 rounded-xl focus:outline-none focus:border-emerald-400 text-emerald-200 placeholder-zinc-600 text-sm">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400">Staff Password Verification</label>
+          <input type="password" id="adminPasswordInput" placeholder="Enter staff/admin password..." 
+            class="w-full px-4 py-3 bg-zinc-900/90 border border-amber-500/50 rounded-xl focus:outline-none focus:border-amber-400 text-amber-200 placeholder-zinc-600 text-sm">
         </div>
 
         <button type="submit" 
@@ -102,11 +118,13 @@
     <header class="h-16 bg-black border-b border-emerald-950/60 px-6 flex items-center justify-between shrink-0">
       <div class="flex items-center gap-3">
         <span class="text-xl font-extrabold bg-gradient-to-r from-emerald-400 to-green-300 bg-clip-text text-transparent neon-text-green">UNICHAT</span>
-        <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">Online</span>
+        <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">
+          Online: <strong id="onlineCountNum">0</strong>
+        </span>
       </div>
       <div class="flex items-center gap-3">
-        <button id="adminPanelBtn" onclick="toggleAdminDrawer()" style="display: none;" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all z-30">
-          <i class="fa-solid fa-shield-halved me-1"></i> Admin Console
+        <button id="adminPanelBtn" onclick="toggleAdminDrawer()" style="display: none;" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-all z-30">
+          <i class="fa-solid fa-shield-halved me-1"></i> Staff Dashboard
         </button>
         <button onclick="leaveChat()" class="text-xs text-zinc-500 hover:text-rose-400 transition-colors">Exit Session</button>
       </div>
@@ -122,6 +140,15 @@
           </button>
         </div>
 
+        <!-- Reply Preview Banner -->
+        <div id="replyPreviewContainer" class="hidden mx-6 mt-2 bg-zinc-900 border-l-4 border-emerald-400 px-3 py-1.5 rounded-r-lg flex justify-between items-center text-xs">
+          <div>
+            <span class="text-emerald-400 font-semibold">Replying to:</span>
+            <p id="replyPreviewText" class="text-zinc-300 truncate max-w-xs"></p>
+          </div>
+          <button id="cancelReplyBtn" onclick="cancelReply()" class="text-zinc-500 hover:text-white font-bold px-1">✕</button>
+        </div>
+
         <div id="messageStream" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-0">
           <div class="text-center my-2">
             <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-500 text-[11px] px-4 py-1.5 rounded-full font-mono">
@@ -132,26 +159,37 @@
 
         <div class="p-4 bg-black border-t border-zinc-900 flex gap-3 shrink-0">
           <button onclick="skipPartner()" class="px-4 py-3 rounded-xl font-bold bg-zinc-900 hover:bg-zinc-800 text-rose-400 border border-zinc-800 text-xs">SKIP</button>
-          <input type="text" id="chatInput" placeholder="Type a message..." class="flex-1 px-4 py-3 bg-zinc-900/90 border border-zinc-800 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-200 text-sm">
+          <input type="text" id="chatInput" placeholder="Type a message (Click any message to reply)..." class="flex-1 px-4 py-3 bg-zinc-900/90 border border-zinc-800 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-200 text-sm">
           <button onclick="sendMessage()" class="px-6 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-black text-xs">SEND</button>
         </div>
       </div>
 
-      <div id="adminDrawer" style="display: none;" class="absolute right-0 top-0 bottom-0 w-80 bg-zinc-950 border-l border-zinc-800 flex-col p-4 z-40 shadow-2xl">
+      <!-- Admin / Moderator Drawer -->
+      <div id="adminDrawer" style="display: none;" class="absolute right-0 top-0 bottom-0 w-80 bg-zinc-950 border-l border-zinc-800 flex flex-col p-4 z-40 shadow-2xl">
         <div class="flex items-center justify-between pb-4 border-b border-zinc-800 shrink-0">
-          <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Reports Console</h3>
+          <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider">🛡️ Staff Console</h3>
           <button onclick="toggleAdminDrawer()" class="text-zinc-500 hover:text-white p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
-        <div class="flex-1 overflow-y-auto py-4 space-y-3 min-h-0" id="adminReportList">
-          <div class="p-3 bg-zinc-900/80 rounded-lg border border-zinc-800 text-xs space-y-2">
-            <div class="flex justify-between text-zinc-400">
-              <span class="font-bold text-slate-200">Anon_Cebu</span>
-              <span class="text-emerald-500">CIT-U</span>
-            </div>
-            <p class="text-zinc-500 italic">"Spamming unsolicited links"</p>
-            <div class="flex justify-end gap-2 pt-1">
-              <button onclick="this.parentElement.parentElement.remove()" class="px-2 py-1 bg-zinc-800 text-zinc-400 rounded">Dismiss</button>
-              <button onclick="alert('User Banned'); this.parentElement.parentElement.remove();" class="px-2 py-1 bg-rose-600 text-white rounded">Ban</button>
+        <div class="flex-1 overflow-y-auto py-4 space-y-4 min-h-0" id="adminDrawerContent">
+          <div id="adminCredentialSection" class="hidden space-y-2 bg-zinc-900 p-3 rounded-lg border border-amber-500/30 text-xs">
+            <h4 class="font-bold text-amber-400">👑 Credential Manager</h4>
+            <select id="targetAccountSelect" class="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-white">
+                <option value="admin">Master Admin Account</option>
+                <option value="1">Moderator Slot 1</option>
+                <option value="2">Moderator Slot 2</option>
+                <option value="3">Moderator Slot 3</option>
+                <option value="4">Moderator Slot 4</option>
+                <option value="5">Moderator Slot 5</option>
+            </select>
+            <input type="text" id="newStaffUser" placeholder="New Username" class="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-white">
+            <input type="password" id="newStaffPass" placeholder="New Password" class="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-white">
+            <button onclick="submitStaffUpdate()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 rounded">Save Changes</button>
+          </div>
+
+          <div class="space-y-2">
+            <h4 class="font-bold text-rose-400 text-xs">Reports Log</h4>
+            <div id="adminReportList" class="space-y-2">
+              <div class="text-xs text-zinc-500 text-center py-4">No reports recorded.</div>
             </div>
           </div>
         </div>
