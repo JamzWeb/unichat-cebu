@@ -41,17 +41,19 @@ function toggleAdminPasswordBox() {
     }
 }
 
-// Handle Setup Form Submission & Immediate Staff Dashboard Reveal
+// Handle Setup Form Submission (Bypasses school requirement if staff is checked)
 if (setupForm) {
     setupForm.addEventListener('submit', (e) => {
         e.preventDefault();
 
         const nickname = nicknameInput.value.trim();
-        const school = schoolSelect.value;
         const isStaff = adminToggle ? adminToggle.checked : false;
         const staffPass = adminPasswordInput ? adminPasswordInput.value.trim() : '';
+        
+        // If staff, don't require school selection (auto-assign staff campus)
+        const school = isStaff ? 'Admin Staff' : (schoolSelect ? schoolSelect.value : '');
 
-        if (!nickname || !school) {
+        if (!nickname || (!school && !isStaff)) {
             alert('Please fill in your nickname and select your university campus.');
             return;
         }
@@ -146,7 +148,6 @@ function sendMessage() {
     const msgId = 'msg_' + (++messageCounter);
     const activeTargetRoom = currentRoom || 'test_room';
     
-    // Check if user has staff badge active to show tag
     let userRoleTag = null;
     if (adminToggle && adminToggle.checked) {
         userRoleTag = adminPasswordInput && adminPasswordInput.value.trim() === 'secureadminpassword' ? '👑 ADMIN' : '📢 MOD';
@@ -167,7 +168,6 @@ function sendMessage() {
         socket.emit('chat-message', messageData);
     }
     
-    // Append locally with neon styling & role tag
     appendMessage(messageData, 'sent');
 
     cancelReply();
@@ -183,34 +183,32 @@ socket.on('message-reaction', (data) => {
     if (bubble) updateReactionDisplay(bubble, data.reaction);
 });
 
-// Render message bubbles featuring neon glows and role badges
+// Render message bubbles with exact inline layout
 function appendMessage(data, type) {
     if (!messageStream) return;
 
     const messageDiv = document.createElement('div');
     messageDiv.id = data.id || ('msg_' + (++messageCounter));
     
-    // Determine alignment and neon styling class match
     const isSent = type === 'sent';
     messageDiv.className = `max-w-[80%] flex flex-col my-3 cursor-pointer ${isSent ? 'ml-auto items-end' : 'mr-auto items-start'}`;
 
-    // Role Tag HTML header (e.g. 👑 ADMIN or 📢 MOD)
     let badgeHtml = '';
     if (data.roleTag) {
         badgeHtml = `
-            <div class="flex items-center space-x-1.5 mb-1 px-1">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-900 border border-emerald-500/40 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)]">
+            <div class="flex items-center space-x-2 mb-1 px-1">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-900 border border-emerald-500/50 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)]">
                     ${escapeHtml(data.roleTag)}
                 </span>
-                <span class="text-xs font-medium text-emerald-400/90">${escapeHtml(data.senderName || (isSent ? 'You' : 'Stranger'))}</span>
-                <span class="text-[10px] text-zinc-500">${escapeHtml(data.timestamp || '')}</span>
+                <span class="text-sm font-bold text-emerald-400">${escapeHtml(data.senderName || (isSent ? 'You' : 'Stranger'))}</span>
+                <span class="text-xs text-zinc-500">${escapeHtml(data.timestamp || '')}</span>
             </div>
         `;
     } else {
         badgeHtml = `
-            <div class="flex items-center space-x-1.5 mb-1 px-1 text-[10px] text-zinc-500">
-                <span>${escapeHtml(data.senderName || (isSent ? 'You' : 'Stranger'))}</span>
-                <span>${escapeHtml(data.timestamp || '')}</span>
+            <div class="flex items-center space-x-2 mb-1 px-1 text-xs">
+                <span class="font-bold text-emerald-400">${escapeHtml(data.senderName || (isSent ? 'You' : 'Stranger'))}</span>
+                <span class="text-zinc-500">${escapeHtml(data.timestamp || '')}</span>
             </div>
         `;
     }
