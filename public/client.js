@@ -80,8 +80,8 @@ if (setupForm) {
         if (messageStream) {
             messageStream.innerHTML = `
                 <div class="text-center my-2">
-                    <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-500 text-[11px] px-4 py-1.5 rounded-full font-mono animate-pulse">
-                        Looking for an available student in the Cebu queue...
+                    <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-400 text-[11px] px-4 py-1.5 rounded-full font-mono">
+                        Queue active. You can type messages below to test UI features right away!
                     </span>
                 </div>
             `;
@@ -126,14 +126,15 @@ socket.on('matched', (data) => {
 });
 
 socket.on('waiting', () => {
-    if (messageStream) {
-        messageStream.innerHTML = `
-            <div class="text-center my-2">
-                <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-500 text-[11px] px-4 py-1.5 rounded-full font-mono animate-pulse">
-                    Waiting for another student to join the queue...
-                </span>
-            </div>
+    if (messageStream && !messageStream.querySelector('.test-mode-notice')) {
+        const notice = document.createElement('div');
+        notice.className = 'text-center my-2 test-mode-notice';
+        notice.innerHTML = `
+            <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-400 text-[11px] px-4 py-1.5 rounded-full font-mono">
+                Waiting for a partner, but test-messaging is enabled! Try typing below.
+            </span>
         `;
+        messageStream.appendChild(notice);
     }
 });
 
@@ -147,12 +148,17 @@ if (chatInput) {
 function sendMessage() {
     if (!chatInput) return;
     const text = chatInput.value.trim();
-    if (!text || !currentRoom) return;
+    if (!text) return;
 
     const msgId = 'msg_' + (++messageCounter);
-    const messageData = { id: msgId, room: currentRoom, message: text, replyTo: replyingToMessage };
+    const activeTargetRoom = currentRoom || 'test_room';
+    const messageData = { id: msgId, room: activeTargetRoom, message: text, replyTo: replyingToMessage };
 
-    socket.emit('chat-message', messageData);
+    if (currentRoom) {
+        socket.emit('chat-message', messageData);
+    }
+    
+    // Always append locally so you can test immediately even while finding
     appendMessage(msgId, text, 'sent', replyingToMessage);
 
     cancelReply();
@@ -174,7 +180,8 @@ function appendMessage(msgId, text, type, replyContext = null) {
 
     const messageDiv = document.createElement('div');
     messageDiv.id = msgId || ('msg_' + (++messageCounter));
-    messageDiv.className = `message-bubble max-w-[75%] p-3 rounded-2xl text-sm relative group flex flex-col my-2 cursor-pointer ${
+    // Added relative positioning wrapper space so the reaction menu stays neatly above
+    messageDiv.className = `message-bubble max-w-[75%] p-3 rounded-2xl text-sm relative group flex flex-col my-4 cursor-pointer ${
         type === 'sent' ? 'ml-auto bg-emerald-600 text-white rounded-br-sm' : 'mr-auto bg-zinc-900 text-slate-200 border border-zinc-800 rounded-bl-sm'
     }`;
 
@@ -202,7 +209,9 @@ window.sendReaction = function(msgId, reactionEmoji) {
     const bubble = document.getElementById(msgId);
     if (!bubble) return;
     updateReactionDisplay(bubble, reactionEmoji);
-    if (currentRoom) socket.emit('message-reaction', { room: currentRoom, msgId: msgId, reaction: reactionEmoji });
+    if (currentRoom) {
+        socket.emit('message-reaction', { room: currentRoom, msgId: msgId, reaction: reactionEmoji });
+    }
 };
 
 function updateReactionDisplay(bubbleElement, emoji) {
@@ -252,7 +261,7 @@ function resetChatState() {
     if (messageStream) {
         messageStream.innerHTML = `
             <div class="text-center my-2">
-                <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-500 text-[11px] px-4 py-1.5 rounded-full font-mono animate-pulse">
+                <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-500 text-[11px] px-4 py-1.5 rounded-full font-mono">
                     Partner left. Finding a new student in queue...
                 </span>
             </div>
