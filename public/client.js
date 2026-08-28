@@ -44,7 +44,7 @@ function toggleAdminPasswordBox() {
 // Handle Setup Form Submission & Immediate Staff Dashboard Reveal
 if (setupForm) {
     setupForm.addEventListener('submit', (e) => {
-        e.preventDefault(); // Stop browser refresh
+        e.preventDefault();
 
         const nickname = nicknameInput.value.trim();
         const school = schoolSelect.value;
@@ -59,7 +59,6 @@ if (setupForm) {
         localStorage.setItem('unichat_nickname', nickname);
         localStorage.setItem('unichat_school', school);
 
-        // If logged in as staff, store password immediately and show the button right away!
         if (isStaff && staffPass) {
             storedAdminPass = staffPass;
             if (adminPanelBtn) {
@@ -67,10 +66,8 @@ if (setupForm) {
             }
         }
 
-        // Request match via socket server
         socket.emit('find-stranger', { nickname, school, isStaff, staffPass });
 
-        // Switch views from Auth to Chat Interface
         if (authView) authView.classList.add('hidden');
         if (chatView) {
             chatView.classList.remove('hidden');
@@ -89,13 +86,11 @@ if (setupForm) {
     });
 }
 
-// Handle staff chat credential validation error
 socket.on('staff:chatError', (err) => {
     alert(err);
     location.reload();
 });
 
-// Matched with a partner
 socket.on('matched', (data) => {
     currentRoom = data.room;
     currentPartner = (data.partner1.id === socket.id) ? data.partner2 : data.partner1;
@@ -118,7 +113,6 @@ socket.on('matched', (data) => {
         `;
     }
 
-    // Ensure staff button stays visible if verified staff
     if (adminToggle && adminToggle.checked && adminPanelBtn) {
         adminPanelBtn.style.display = 'inline-flex';
         storedAdminPass = adminPasswordInput.value.trim();
@@ -138,7 +132,6 @@ socket.on('waiting', () => {
     }
 });
 
-// Send message triggers
 if (chatInput) {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
@@ -152,21 +145,37 @@ function sendMessage() {
 
     const msgId = 'msg_' + (++messageCounter);
     const activeTargetRoom = currentRoom || 'test_room';
-    const messageData = { id: msgId, room: activeTargetRoom, message: text, replyTo: replyingToMessage };
+    
+    // Check if user has staff badge active to show tag
+    let userRoleTag = null;
+    if (adminToggle && adminToggle.checked) {
+        userRoleTag = adminPasswordInput && adminPasswordInput.value.trim() === 'secureadminpassword' ? '👑 ADMIN' : '📢 MOD';
+    }
+    const nickname = localStorage.getItem('unichat_nickname') || 'You';
+
+    const messageData = { 
+        id: msgId, 
+        room: activeTargetRoom, 
+        message: text, 
+        replyTo: replyingToMessage,
+        senderName: nickname,
+        roleTag: userRoleTag,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
 
     if (currentRoom) {
         socket.emit('chat-message', messageData);
     }
     
-    // Always append locally so you can test immediately even while finding
-    appendMessage(msgId, text, 'sent', replyingToMessage);
+    // Append locally with neon styling & role tag
+    appendMessage(messageData, 'sent');
 
     cancelReply();
     chatInput.value = '';
 }
 
 socket.on('chat-message', (data) => {
-    appendMessage(data.id, data.message, 'received', data.replyTo);
+    appendMessage(data, 'received');
 });
 
 socket.on('message-reaction', (data) => {
@@ -174,32 +183,60 @@ socket.on('message-reaction', (data) => {
     if (bubble) updateReactionDisplay(bubble, data.reaction);
 });
 
-// Render message bubbles in the stream with reaction menus & reply context
-function appendMessage(msgId, text, type, replyContext = null) {
+// Render message bubbles featuring neon glows and role badges
+function appendMessage(data, type) {
     if (!messageStream) return;
 
     const messageDiv = document.createElement('div');
-    messageDiv.id = msgId || ('msg_' + (++messageCounter));
-    // Added relative positioning wrapper space so the reaction menu stays neatly above
-    messageDiv.className = `message-bubble max-w-[75%] p-3 rounded-2xl text-sm relative group flex flex-col my-4 cursor-pointer ${
-        type === 'sent' ? 'ml-auto bg-emerald-600 text-white rounded-br-sm' : 'mr-auto bg-zinc-900 text-slate-200 border border-zinc-800 rounded-bl-sm'
-    }`;
+    messageDiv.id = data.id || ('msg_' + (++messageCounter));
+    
+    // Determine alignment and neon styling class match
+    const isSent = type === 'sent';
+    messageDiv.className = `max-w-[80%] flex flex-col my-3 cursor-pointer ${isSent ? 'ml-auto items-end' : 'mr-auto items-start'}`;
 
-    let replyHtml = replyContext ? `<div class="bg-black/30 border-l-2 border-white/60 px-2 py-1 mb-1 text-xs rounded text-zinc-300 italic">Replying to: "${escapeHtml(replyContext)}"</div>` : '';
+    // Role Tag HTML header (e.g. 👑 ADMIN or 📢 MOD)
+    let badgeHtml = '';
+    if (data.roleTag) {
+        badgeHtml = `
+            <div class="flex items-center space-x-1.5 mb-1 px-1">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-900 border border-emerald-500/40 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)]">
+                    ${escapeHtml(data.roleTag)}
+                </span>
+                <span class="text-xs font-medium text-emerald-400/90">${escapeHtml(data.senderName || (isSent ? 'You' : 'Stranger'))}</span>
+                <span class="text-[10px] text-zinc-500">${escapeHtml(data.timestamp || '')}</span>
+            </div>
+        `;
+    } else {
+        badgeHtml = `
+            <div class="flex items-center space-x-1.5 mb-1 px-1 text-[10px] text-zinc-500">
+                <span>${escapeHtml(data.senderName || (isSent ? 'You' : 'Stranger'))}</span>
+                <span>${escapeHtml(data.timestamp || '')}</span>
+            </div>
+        `;
+    }
+
+    let replyHtml = data.replyTo ? `<div class="bg-black/40 border-l-2 border-emerald-500 px-2 py-1 mb-1 text-xs rounded text-zinc-300 italic">Replying to: "${escapeHtml(data.replyTo)}"</div>` : '';
 
     messageDiv.innerHTML = `
-        ${replyHtml}
-        <span class="break-words">${escapeHtml(text)}</span>
-        <div class="reaction-menu ${type === 'sent' ? 'right-0' : 'left-0'}">
-            <button onclick="sendReaction('${messageDiv.id}', '❤️')">❤️</button>
-            <button onclick="sendReaction('${messageDiv.id}', '😲')">😲</button>
-            <button onclick="sendReaction('${messageDiv.id}', '☹')">☹</button>
-            <button onclick="sendReaction('${messageDiv.id}', '👌')">👌</button>
+        ${badgeHtml}
+        <div class="message-bubble p-3 rounded-2xl text-sm relative group flex flex-col ${
+            isSent 
+                ? 'bg-zinc-900 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.2)] rounded-br-sm' 
+                : 'bg-zinc-900 text-slate-200 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)] rounded-bl-sm'
+        }">
+            ${replyHtml}
+            <span class="break-words">${escapeHtml(data.message)}</span>
+            <div class="reaction-menu ${isSent ? 'right-0' : 'left-0'}">
+                <button onclick="sendReaction('${messageDiv.id}', '❤️')">❤️</button>
+                <button onclick="sendReaction('${messageDiv.id}', '😲')">😲</button>
+                <button onclick="sendReaction('${messageDiv.id}', '☹')">☹</button>
+                <button onclick="sendReaction('${messageDiv.id}', '👌')">👌</button>
+            </div>
+            <div class="reactions-container flex space-x-1 mt-1 text-xs"></div>
         </div>
-        <div class="reactions-container flex space-x-1 mt-1 text-xs"></div>
     `;
 
-    messageDiv.addEventListener('click', () => setReply(text));
+    messageDiv.querySelector('.message-bubble').addEventListener('click', () => setReply(data.message));
     messageStream.appendChild(messageDiv);
     messageStream.scrollTop = messageStream.scrollHeight;
 }
@@ -216,7 +253,7 @@ window.sendReaction = function(msgId, reactionEmoji) {
 
 function updateReactionDisplay(bubbleElement, emoji) {
     const container = bubbleElement.querySelector('.reactions-container');
-    if (container) container.innerHTML = `<span class="bg-zinc-950/80 px-1.5 py-0.5 rounded-full border border-zinc-800 text-[10px]">${emoji}</span>`;
+    if (container) container.innerHTML = `<span class="bg-zinc-950/80 px-1.5 py-0.5 rounded-full border border-emerald-500/40 text-[10px]">${emoji}</span>`;
 }
 
 window.setReply = function(text) {
@@ -233,7 +270,6 @@ function cancelReply() {
     if (replyPreviewContainer) replyPreviewContainer.classList.add('hidden');
 }
 
-// Skip / Leave chat functions
 function skipPartner() {
     socket.emit('skip');
     resetChatState();
@@ -275,7 +311,6 @@ function resetChatState() {
     socket.emit('find-stranger', { nickname, school, isStaff, staffPass });
 }
 
-// Report current partner function
 function reportCurrentPartner() {
     const reason = prompt('Please describe the reason for reporting this user:');
     if (!reason) return;
@@ -285,7 +320,6 @@ function reportCurrentPartner() {
     alert('Report submitted successfully to moderators.');
 }
 
-// Admin / Moderator Dashboard Drawer & Data Fetching
 function toggleAdminDrawer() {
     if (!adminDrawer) return;
     if (adminDrawer.style.display === 'none' || adminDrawer.style.display === '') {
@@ -346,7 +380,6 @@ socket.on('admin:actionSuccess', async (msg) => {
 
 socket.on('admin:actionError', (err) => alert('Error: ' + err));
 
-// Utility HTML escape to prevent injection
 function escapeHtml(text) {
     const map = {
         '&': '&amp;',
