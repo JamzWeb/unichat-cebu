@@ -41,7 +41,7 @@ function toggleAdminPasswordBox() {
     }
 }
 
-// Handle Setup Form Submission (Prevents Page Refresh)
+// Handle Setup Form Submission & Immediate Staff Dashboard Reveal
 if (setupForm) {
     setupForm.addEventListener('submit', (e) => {
         e.preventDefault(); // Stop browser refresh
@@ -58,6 +58,14 @@ if (setupForm) {
 
         localStorage.setItem('unichat_nickname', nickname);
         localStorage.setItem('unichat_school', school);
+
+        // If logged in as staff, store password immediately and show the button right away!
+        if (isStaff && staffPass) {
+            storedAdminPass = staffPass;
+            if (adminPanelBtn) {
+                adminPanelBtn.style.display = 'inline-flex';
+            }
+        }
 
         // Request match via socket server
         socket.emit('find-stranger', { nickname, school, isStaff, staffPass });
@@ -110,7 +118,7 @@ socket.on('matched', (data) => {
         `;
     }
 
-    // Show staff button if logged in with staff verification
+    // Ensure staff button stays visible if verified staff
     if (adminToggle && adminToggle.checked && adminPanelBtn) {
         adminPanelBtn.style.display = 'inline-flex';
         storedAdminPass = adminPasswordInput.value.trim();
