@@ -6,111 +6,170 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Serve static frontend files from the 'public' folder
+app.use(express.json());
 app.use(express.static('public'));
 
-let waitingQueue = [];
-const activeRooms = new Map();
+let waitingUser = null;
+let activeRooms = new Map();
+let onlineUsersCount = 0;
 
-const emojiRegex = /[\p{Extended_Pictographic}\p{Emoji_Component}]/u;
-const ADMIN_SECRET_PASSWORD = "jamzrieven1";
+let reportsList = [];
+let feedbackList = [];
+
+// DYNAMIC STAFF ACCOUNTS (Master Admin & 5 Managed Moderator Slots)
+let staffAccounts = {
+    admin: { username: "Jamz", password: "119105" },
+    mods: [
+        { id: 1, username: "moderator1", password: "11111", status: "Active" },
+        { id: 2, username: "moderator2", password: "22222", status: "Active" },
+        { id: 3, username: "moderator3", password: "33333", status: "Active" },
+        { id: 4, username: "moderator4", password: "44444", status: "Inactive / Open Slot" },
+        { id: 5, username: "moderator5", password: "55555", status: "Inactive / Open Slot" }
+    ]
+};
 
 io.on('connection', (socket) => {
-  console.log(`⚡ User connected: ${socket.id}`);
+    onlineUsersCount++;
+    io.emit('online-count-update', onlineUsersCount);
 
-  socket.on('register_user', (userData) => {
-    if (emojiRegex.test(userData.nickname)) {
-      socket.emit('registration_error', 'Nicknames cannot contain emojis.');
-      return;
-    }
+    socket.on('find-stranger', (userData) => {
+        socket.userData = userData;
 
-    // Verify Admin Password if admin login was requested
-    if (userData.isAdmin) {
-      if (userData.adminPassword !== ADMIN_SECRET_PASSWORD) {
-        socket.emit('registration_error', 'Incorrect Admin Secret Password!');
-        return;
-      }
-      socket.isAdmin = true;
-    } else {
-      socket.isAdmin = false;
-    }
+        if (waitingUser && waitingUser.id !== socket.id) {
+            const roomName = `room_${socket.id}_${waitingUser.id}`;
+            
+            socket.join(roomName);
+            waitingUser.join(roomName);
 
-    socket.nickname = userData.nickname;
-    socket.school = userData.school;
+            activeRooms.set(socket.id, roomName);
+            activeRooms.set(waitingUser.id, roomName);
 
-    // Confirm login success back to client
-    socket.emit('login_success', { isAdmin: socket.isAdmin });
+            const stranger1 = { id: socket.id, nickname: socket.userData.nickname, school: socket.userData.school };
+            const stranger2 = { id: waitingUser.id, nickname: waitingUser.userData.nickname, school: waitingUser.userData.school };
 
-    waitingQueue.push(socket);
-    tryPairUsers();
-  });
+            io.to(roomName).emit('matched', { room: roomName, partner1: stranger1, partner2: stranger2 });
+            
+            waitingUser = null;
+        } else {
+            waitingUser = socket;
+            socket.emit('waiting');
+        }
+    });
 
-  socket.on('send_message', (data) => {
-    const roomId = activeRooms.get(socket.id);
-    if (roomId) {
-      socket.to(roomId).emit('receive_message', {
-        sender: socket.nickname,
-        school: socket.school,
-        text: data.text,
-        isAdmin: socket.isAdmin
-      });
-    }
-  });
+    socket.on('chat-message', (data) => {
+        socket.to(data.room).emit('chat-message', data);
+    });
 
-  socket.on('skip_partner', () => {
-    cleanupPair(socket);
-    waitingQueue.push(socket);
-    tryPairUsers();
-  });
+    // Handle official chat reactions
+    socket.on('message-reaction', (data) => {
+        socket.to(data.room).emit('message-reaction', data);
+    });
 
-  socket.on('report_user', (data) => {
-    const roomId = activeRooms.get(socket.id);
-    // Broadcast report notification to all connected admin sockets if needed
-    console.log(`🚨 Report logged: ${data.reason} from room ${roomId}`);
-  });
+    socket.on('typing', (data) => {
+        socket.to(data.room).emit('typing', data);
+    });
 
-  socket.on('disconnect', () => {
-    cleanupPair(socket);
-    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
-    console.log(`🔌 User disconnected: ${socket.id}`);
-  });
+    socket.on('submit-feedback', (data) => {
+        const entry = {
+            type: data.type,
+            message: data.message,
+            senderSchool: data.school || 'Anonymous',
+            timestamp: new Date().toLocaleString()
+        };
+
+        if (data.type === 'report') {
+            reportsList.unshift(entry);
+        } else {
+            feedbackList.unshift(entry);
+        }
+    });
+
+    // Master Admin updating staff credentials dynamically
+    socket.on('admin:updateStaff', ({ adminPass, targetType, targetId, newUsername, newPassword }) => {
+        if (adminPass !== staffAccounts.admin.password) {
+            return socket.emit('admin:actionError', 'Unauthorized: Incorrect Master Admin password.');
+        }
+
+        if (targetType === 'admin') {
+            if (newUsername) staffAccounts.admin.username = newUsername;
+            if (newPassword) staffAccounts.admin.password = newPassword;
+            socket.emit('admin:actionSuccess', 'Master Admin credentials updated successfully!');
+        } else if (targetType === 'mod') {
+            const mod = staffAccounts.mods.find(m => m.id === parseInt(targetId));
+            if (mod) {
+                if (newUsername) mod.username = newUsername;
+                if (newPassword) mod.password = newPassword;
+                mod.status = 'Active';
+                socket.emit('admin:actionSuccess', `Moderator Slot #${targetId} updated successfully!`);
+            } else {
+                socket.emit('admin:actionError', 'Moderator slot not found.');
+            }
+        }
+    });
+
+    socket.on('skip', () => {
+        handleDisconnectOrSkip(socket);
+    });
+
+    socket.on('disconnect', () => {
+        onlineUsersCount = Math.max(0, onlineUsersCount - 1);
+        io.emit('online-count-update', onlineUsersCount);
+        handleDisconnectOrSkip(socket);
+    });
 });
 
-function tryPairUsers() {
-  while (waitingQueue.length >= 2) {
-    const user1 = waitingQueue.shift();
-    const user2 = waitingQueue.shift();
+// Admin & Moderator Login API
+app.get('/api/admin/data', (req, res) => {
+    const password = req.query.pass;
 
-    // Ensure sockets are still connected before pairing
-    if (!user1.connected || !user2.connected) continue;
+    if (password === staffAccounts.admin.password) {
+        return res.json({
+            role: 'admin',
+            adminUsername: staffAccounts.admin.username,
+            onlineUsers: onlineUsersCount,
+            activeRoomsCount: activeRooms.size / 2,
+            reports: reportsList,
+            feedback: feedbackList,
+            moderators: staffAccounts.mods
+        });
+    }
 
-    const roomId = `room_${user1.id}_${user2.id}`;
-    user1.join(roomId);
-    user2.join(roomId);
+    const matchedMod = staffAccounts.mods.find(m => m.password === password && m.status === 'Active');
+    if (matchedMod) {
+        return res.json({
+            role: 'moderator',
+            modName: matchedMod.username,
+            onlineUsers: onlineUsersCount,
+            activeRoomsCount: activeRooms.size / 2,
+            reports: reportsList,
+            feedback: feedbackList
+        });
+    }
 
-    activeRooms.set(user1.id, roomId);
-    activeRooms.set(user2.id, roomId);
+    return res.status(403).json({ error: 'Unauthorized access. Invalid password or revoked slot.' });
+});
 
-    user1.emit('partner_matched', { nickname: user2.nickname, school: user2.school, isAdmin: user2.isAdmin });
-    user2.emit('partner_matched', { nickname: user1.nickname, school: user1.school, isAdmin: user1.isAdmin });
-  }
+function handleDisconnectOrSkip(socket) {
+    if (waitingUser === socket) {
+        waitingUser = null;
+    }
+
+    const roomName = activeRooms.get(socket.id);
+    if (roomName) {
+        socket.to(roomName).emit('partner-disconnected');
+        
+        const socketsInRoom = io.sockets.adapter.rooms.get(roomName);
+        if (socketsInRoom) {
+            for (const sId of socketsInRoom) {
+                const s = io.sockets.sockets.get(sId);
+                if (s) s.leave(roomName);
+                activeRooms.delete(sId);
+            }
+        }
+    }
 }
 
-function cleanupPair(socket) {
-  const roomId = activeRooms.get(socket.id);
-  if (roomId) {
-    socket.to(roomId).emit('receive_message', {
-      sender: 'System',
-      school: '',
-      text: 'Your chat partner has left the session.',
-      isAdmin: false
-    });
-    activeRooms.delete(socket.id);
-  }
-}
-
-// Dynamic port assignment for Render compatibility
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 UNICHAT server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
