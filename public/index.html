@@ -1,136 +1,220 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UNICHAT - Cebu University Text Chat</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Custom Neon Theme Styles -->
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniChat Cebu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .message-bubble {
+            transition: transform 0.2s ease;
+        }
+        /* Official Reaction picker popup style */
+        .reaction-menu {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 9999px;
+            padding: 4px 8px;
+            gap: 6px;
+            z-index: 20;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+        .message-bubble:hover .reaction-menu {
+            display: flex;
+        }
+        /* Custom scrollbar for chat and dropdowns */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+    </style>
 </head>
-<body class="bg-black text-slate-100 font-sans antialiased h-screen overflow-hidden flex flex-col">
+<body class="bg-slate-950 text-slate-100 h-screen flex flex-col justify-between">
 
-  <!-- ================= VIEW 1: AUTH & SETUP ================= -->
-  <div id="authView" class="flex h-full w-full items-center justify-center bg-gradient-to-br from-black via-zinc-950 to-emerald-950/40 p-4 absolute inset-0 z-50 overflow-y-auto">
-    <div class="w-full max-w-md p-8 rounded-2xl bg-zinc-950/90 border border-emerald-500/30 neon-border-green backdrop-blur-md">
-      
-      <div class="text-center mb-8">
-        <h1 class="text-4xl font-extrabold tracking-wider bg-gradient-to-r from-emerald-400 via-green-300 to-emerald-500 bg-clip-text text-transparent neon-text-green">
-          UNICHAT
-        </h1>
-        <p class="text-xs text-emerald-500/80 font-mono mt-1">CEBU CAMPUS TEXT DIRECT</p>
-      </div>
-
-      <form id="setupForm" class="space-y-5">
-        <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">Nickname <span class="text-zinc-500 font-normal lowercase">(no emojis allowed)</span></label>
-          <input type="text" id="nicknameInput" required placeholder="e.g., SugboKing" 
-            class="w-full px-4 py-3 bg-zinc-900/90 border border-zinc-800 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-200 placeholder-zinc-600 text-sm">
+    <!-- HEADER / ONLINE COUNT BADGE & CROWN BUTTON -->
+    <header class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+        <div class="flex items-center space-x-2">
+            <h1 class="font-bold text-emerald-400 tracking-wider text-sm">UniChat Cebu 🎓</h1>
+            <!-- Secret Staff Login Button -->
+            <button onclick="openAuthModal()" title="Staff Login" class="text-slate-400 hover:text-amber-400 transition text-xs bg-slate-900 border border-slate-800 px-2 py-1 rounded">👑</button>
         </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">Your University</label>
-          <select id="schoolSelect" required 
-            class="w-full px-4 py-3 bg-zinc-900/90 border border-zinc-800 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-200 text-sm">
-            <option value="" disabled selected>Select Cebu Campus...</option>
-            <option value="USC">University of San Carlos (USC)</option>
-            <option value="UP Cebu">University of the Philippines Cebu (UP)</option>
-            <option value="CIT-U">Cebu Institute of Technology – University (CIT-U)</option>
-            <option value="CTU">Cebu Technological University (CTU)</option>
-            <option value="CRMC">Cebu Roosevelt Memorial Colleges (CRMC)</option>
-            <option value="UC">University of Cebu (UC)</option>
-            <option value="USJ-R">University of San Jose–Recoletos (USJ-R)</option>
-          </select>
+        
+        <div class="flex items-center space-x-2">
+            <button onclick="openFeedbackModal()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg border border-slate-700 transition">Feedback</button>
+            
+            <div id="onlineBadge" class="flex items-center space-x-1.5 bg-slate-900 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-full text-xs font-mono">
+                <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                <span>Online: <strong id="onlineCountNum" class="text-white">0</strong></span>
+            </div>
         </div>
-
-        <div class="flex items-center gap-2 pt-1">
-          <input type="checkbox" id="adminToggle" onchange="toggleAdminPasswordBox()" class="accent-emerald-500 h-4 w-4 rounded border-zinc-800 bg-zinc-900">
-          <label for="adminToggle" class="text-xs text-zinc-400 select-none">Log in as <span class="text-emerald-400 font-bold">Admin Account</span></label>
-        </div>
-
-        <div id="adminPasswordContainer" class="hidden space-y-2 pt-1">
-          <label class="block text-xs font-semibold uppercase tracking-wider text-emerald-400">Admin Secret Password</label>
-          <input type="password" id="adminPasswordInput" placeholder="Enter admin password..." 
-            class="w-full px-4 py-3 bg-zinc-900/90 border border-emerald-500/50 rounded-xl focus:outline-none focus:border-emerald-400 text-emerald-200 placeholder-zinc-600 text-sm">
-        </div>
-
-        <button type="submit" 
-          class="w-full py-3.5 rounded-xl font-bold text-black bg-gradient-to-r from-emerald-400 via-green-400 to-emerald-500 hover:from-emerald-300 transition-all shadow-[0_0_20px_rgba(34,197,94,0.4)] text-sm tracking-wide">
-          START MATCHING
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ================= VIEW 2: CHAT INTERFACE ================= -->
-  <div id="chatView" class="hidden h-full w-full flex-col bg-zinc-950 flex-1 overflow-hidden">
-    
-    <header class="h-16 bg-black border-b border-emerald-950/60 px-6 flex items-center justify-between shrink-0">
-      <div class="flex items-center gap-3">
-        <span class="text-xl font-extrabold bg-gradient-to-r from-emerald-400 to-green-300 bg-clip-text text-transparent neon-text-green">UNICHAT</span>
-        <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">Online</span>
-      </div>
-      <div class="flex items-center gap-3">
-        <button id="adminPanelBtn" onclick="toggleAdminDrawer()" style="display: none;" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all z-30">
-          <i class="fa-solid fa-shield-halved me-1"></i> Admin Console
-        </button>
-        <button onclick="leaveChat()" class="text-xs text-zinc-500 hover:text-rose-400 transition-colors">Exit Session</button>
-      </div>
     </header>
 
-    <div class="flex-1 min-h-0 flex relative overflow-hidden">
-      
-      <div class="flex-1 flex flex-col min-h-0 bg-gradient-to-b from-black via-zinc-950 to-black">
-        <div class="h-12 bg-zinc-950/80 border-b border-zinc-900 px-6 flex items-center justify-between text-xs text-zinc-400 shrink-0">
-          <div>Matched Partner: <span id="partnerInfo" class="font-bold text-slate-200">Finding stranger...</span></div>
-          <button onclick="reportCurrentPartner()" class="text-rose-500/80 hover:text-rose-400 text-xs flex items-center gap-1">
-            <i class="fa-solid fa-flag"></i> Report
-          </button>
-        </div>
-
-        <div id="messageStream" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-0">
-          <div class="text-center my-2">
-            <span class="inline-block bg-zinc-900/80 border border-zinc-800 text-zinc-500 text-[11px] px-4 py-1.5 rounded-full font-mono">
-              Connected to Cebu Peer Engine. Be respectful & enjoy!
-            </span>
-          </div>
-        </div>
-
-        <div class="p-4 bg-black border-t border-zinc-900 flex gap-3 shrink-0">
-          <button onclick="skipPartner()" class="px-4 py-3 rounded-xl font-bold bg-zinc-900 hover:bg-zinc-800 text-rose-400 border border-zinc-800 text-xs">SKIP</button>
-          <input type="text" id="chatInput" placeholder="Type a message..." class="flex-1 px-4 py-3 bg-zinc-900/90 border border-zinc-800 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-200 text-sm">
-          <button onclick="sendMessage()" class="px-6 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-black text-xs">SEND</button>
-        </div>
-      </div>
-
-      <div id="adminDrawer" style="display: none;" class="absolute right-0 top-0 bottom-0 w-80 bg-zinc-950 border-l border-zinc-800 flex-col p-4 z-40 shadow-2xl">
-        <div class="flex items-center justify-between pb-4 border-b border-zinc-800 shrink-0">
-          <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Reports Console</h3>
-          <button onclick="toggleAdminDrawer()" class="text-zinc-500 hover:text-white p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
-        </div>
-        <div class="flex-1 overflow-y-auto py-4 space-y-3 min-h-0" id="adminReportList">
-          <div class="p-3 bg-zinc-900/80 rounded-lg border border-zinc-800 text-xs space-y-2">
-            <div class="flex justify-between text-zinc-400">
-              <span class="font-bold text-slate-200">Anon_Cebu</span>
-              <span class="text-emerald-500">CIT-U</span>
+    <!-- SETUP & CHAT CONTAINER -->
+    <main class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3" id="chatMessages">
+        
+        <!-- Initial Setup Screen -->
+        <div id="setupScreen" class="max-w-md mx-auto my-auto bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col space-y-4 shadow-xl w-full">
+            <h2 class="text-lg font-bold text-emerald-400 text-center">Welcome to UniChat Cebu!</h2>
+            <p class="text-xs text-slate-400 text-center">Connect with students across campuses and regional branches around Cebu.</p>
+            
+            <div class="flex flex-col space-y-1">
+                <label class="text-xs text-slate-400">Nickname:</label>
+                <input type="text" id="nicknameInput" placeholder="Enter your nickname..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
             </div>
-            <p class="text-zinc-500 italic">"Spamming unsolicited links"</p>
-            <div class="flex justify-end gap-2 pt-1">
-              <button onclick="this.parentElement.parentElement.remove()" class="px-2 py-1 bg-zinc-800 text-zinc-400 rounded">Dismiss</button>
-              <button onclick="alert('User Banned'); this.parentElement.parentElement.remove();" class="px-2 py-1 bg-rose-600 text-white rounded">Ban</button>
-            </div>
-          </div>
-        </div>
-      </div>
 
+            <div class="flex flex-col space-y-1">
+                <label class="text-xs text-slate-400">University / Campus Branch:</label>
+                <select id="schoolSelect" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 max-h-48 overflow-y-auto">
+                    <!-- A to Z Alphabetical Campus & Branch List -->
+                    <option value="ACLC-Mandaue">ACLC-Mandaue</option>
+                    <option value="ACT-Bulacao">ACT-Bulacao</option>
+                    <option value="ACT-Cyber Tower 2">ACT-Cyber Tower 2</option>
+                    <option value="ACT-Main">ACT-Main</option>
+                    <option value="ACT-Pit-os">ACT-Pit-os</option>
+                    <option value="AMA-Cebu">AMA-Cebu</option>
+                    <option value="Benedicto-Cebu City">Benedicto-Cebu City</option>
+                    <option value="Benedicto-Mandaue">Benedicto-Mandaue</option>
+                    <option value="CDU">CDU</option>
+                    <option value="CEC">CEC</option>
+                    <option value="CIC-Cebu">CIC-Cebu</option>
+                    <option value="CIM">CIM</option>
+                    <option value="CIT-U">CIT-U</option>
+                    <option value="CNU-Balamban">CNU-Balamban</option>
+                    <option value="CNU-Main">CNU-Main</option>
+                    <option value="CNU-Medellin">CNU-Medellin</option>
+                    <option value="CRMC">CRMC</option>
+                    <option value="CTU-Argao">CTU-Argao</option>
+                    <option value="CTU-Barili">CTU-Barili</option>
+                    <option value="CTU-Carmen">CTU-Carmen</option>
+                    <option value="CTU-Daanbantayan">CTU-Daanbantayan</option>
+                    <option value="CTU-Danao">CTU-Danao</option>
+                    <option value="CTU-Main">CTU-Main</option>
+                    <option value="CTU-Moalboal">CTU-Moalboal</option>
+                    <option value="CTU-Naga">CTU-Naga</option>
+                    <option value="CTU-San Fernando">CTU-San Fernando</option>
+                    <option value="CTU-San Francisco">CTU-San Francisco</option>
+                    <option value="FRVMF">FRVMF</option>
+                    <option value="IAU">IAU</option>
+                    <option value="iACADEMY-Cebu">iACADEMY-Cebu</option>
+                    <option value="Informatics-Cebu">Informatics-Cebu</option>
+                    <option value="LCC-Lapu-Lapu">LCC (Lapu-Lapu City College)</option>
+                    <option value="LCC-Liloan">LCC-Liloan</option>
+                    <option value="MCC-Mandaue">MCC (Mandaue City College)</option>
+                    <option value="NCCI">NCCI</option>
+                    <option value="SCC-Carcar / Talisay">SCC-Carcar / Talisay</option>
+                    <option value="SCSIT-Main">SCSIT-Main</option>
+                    <option value="SCSIT-Talisay">SCSIT-Talisay</option>
+                    <option value="SPCFI-Mandaue">SPCFI-Mandaue</option>
+                    <option value="SPCFI-Ramos">SPCFI-Ramos</option>
+                    <option value="SRCC-Bogo">SRCC-Bogo</option>
+                    <option value="STC-Cebu">STC-Cebu</option>
+                    <option value="STI-Cebu">STI-Cebu</option>
+                    <option value="St. Louise">St. Louise</option>
+                    <option value="SWU PHINMA">SWU PHINMA</option>
+                    <option value="TCC-Talisay">TCC (Talisay City College)</option>
+                    <option value="UC-Banilad">UC-Banilad</option>
+                    <option value="UC-Main">UC-Main</option>
+                    <option value="UC-METC">UC-METC</option>
+                    <option value="UC-Pardo-Talisay">UC-Pardo-Talisay</option>
+                    <option value="UC-UCLM">UC-UCLM</option>
+                    <option value="UP-Cebu Lahug">UP Cebu-Lahug</option>
+                    <option value="UP-Cebu SRP">UP Cebu-SRP</option>
+                    <option value="USC-Downtown">USC-Downtown</option>
+                    <option value="USC-North">USC-North</option>
+                    <option value="USC-South">USC-South</option>
+                    <option value="USC-Talamban">USC-Talamban</option>
+                    <option value="USJ-R Basak">USJ-R Basak</option>
+                    <option value="USJ-R Main">USJ-R Main</option>
+                    <option value="USPF">USPF</option>
+                    <option value="UV-Compostela">UV-Compostela</option>
+                    <option value="UV-Dalaguete">UV-Dalaguete</option>
+                    <option value="UV-Danao">UV-Danao</option>
+                    <option value="UV-GCM">UV-GCM</option>
+                    <option value="UV-Main">UV-Main</option>
+                    <option value="UV-Mandaue">UV-Mandaue</option>
+                    <option value="UV-Minglanilla">UV-Minglanilla</option>
+                    <option value="UV-Toledo">UV-Toledo</option>
+                    <option value="Velez">Velez</option>
+                    <option value="Other School/Branch">Other School / Branch</option>
+                </select>
+            </div>
+
+            <button id="findBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-lg text-sm transition">Find Stranger</button>
+        </div>
+    </main>
+
+    <!-- INTERACTION AREA (Hidden until matched) -->
+    <div id="chatFooter" class="p-4 bg-slate-900 border-t border-slate-800 flex flex-col space-y-2 hidden">
+        
+        <!-- Typing Indicator -->
+        <div id="typingIndicator" class="text-xs text-slate-400 italic h-4 hidden">
+            Stranger is typing...
+        </div>
+
+        <!-- Reply Preview Banner -->
+        <div id="replyPreviewContainer" class="hidden flex justify-between items-center bg-slate-800 px-3 py-1.5 rounded-md text-xs border-l-4 border-emerald-400">
+            <div>
+                <span class="text-emerald-400 font-semibold">Replying to:</span>
+                <p id="replyPreviewText" class="text-slate-300 truncate max-w-xs"></p>
+            </div>
+            <button id="cancelReplyBtn" class="text-slate-400 hover:text-white font-bold px-1">✕</button>
+        </div>
+
+        <div class="flex space-x-2">
+            <input type="text" id="messageInput" placeholder="Type a message..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <button id="sendBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">Send</button>
+            <button id="skipBtn" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">Skip / Leave</button>
+        </div>
     </div>
-  </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
+    <!-- STAFF AUTHENTICATION MODAL -->
+    <div id="authModal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl max-w-sm w-full space-y-4 shadow-xl">
+            <h3 class="text-sm font-bold text-amber-400 text-center">👑 Staff & Moderator Access</h3>
+            <p class="text-xs text-slate-400 text-center">Enter your assigned staff or admin password.</p>
+            
+            <input type="password" id="staffPassInput" placeholder="Enter password..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+            
+            <div class="flex space-x-2">
+                <button onclick="loginAsStaff()" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 rounded-lg text-sm">Login</button>
+                <button onclick="closeAuthModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FEEDBACK / REPORT MODAL -->
+    <div id="feedbackModal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl max-w-md w-full space-y-4">
+            <h3 class="text-sm font-bold text-emerald-400">Send Feedback, Bug Report, or User Report</h3>
+            
+            <select id="feedbackType" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="suggestion">💡 Suggestion / Feature Request</option>
+                <option value="bug">🐛 Report a Bug</option>
+                <option value="report">⚠️ Report a Bad User / Chat Issue</option>
+            </select>
+
+            <textarea id="feedbackMsg" rows="3" placeholder="Describe your report or feedback..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-emerald-500"></textarea>
+
+            <div class="flex space-x-2">
+                <button onclick="submitFeedbackForm()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-lg text-sm">Submit</button>
+                <button onclick="closeFeedbackModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
 </body>
-</html>
+                  </html>
