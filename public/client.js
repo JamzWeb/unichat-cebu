@@ -15,20 +15,22 @@ const chatInput = document.getElementById('chatInput');
 const adminPanelBtn = document.getElementById('adminPanelBtn');
 const adminDrawer = document.getElementById('adminDrawer');
 const adminReportList = document.getElementById('adminReportList');
+const replyPreviewContainer = document.getElementById('replyPreviewContainer');
+const replyPreviewText = document.getElementById('replyPreviewText');
 
 let currentRoom = null;
 let currentPartner = null;
 let messageCounter = 0;
 let storedAdminPass = '';
+let replyingToMessage = null;
 
 // Online user count update from server
 socket.on('online-count-update', (count) => {
-    // Optional badge if present
     const onlineCountNum = document.getElementById('onlineCountNum');
     if (onlineCountNum) onlineCountNum.textContent = count;
 });
 
-// Toggle admin password input field visibility on setup screen
+// Toggle staff password field visibility
 function toggleAdminPasswordBox() {
     if (adminToggle && adminPasswordContainer) {
         if (adminToggle.checked) {
@@ -42,7 +44,7 @@ function toggleAdminPasswordBox() {
 // Handle Setup Form Submission (Prevents Page Refresh)
 if (setupForm) {
     setupForm.addEventListener('submit', (e) => {
-        e.preventDefault(); // Stop browser from refreshing
+        e.preventDefault(); // Stop browser refresh
 
         const nickname = nicknameInput.value.trim();
         const school = schoolSelect.value;
@@ -108,7 +110,7 @@ socket.on('matched', (data) => {
         `;
     }
 
-    // Show admin button if current user logged in with admin credentials
+    // Show staff button if logged in with staff verification
     if (adminToggle && adminToggle.checked && adminPanelBtn) {
         adminPanelBtn.style.display = 'inline-flex';
         storedAdminPass = adminPasswordInput.value.trim();
@@ -140,37 +142,78 @@ function sendMessage() {
     if (!text || !currentRoom) return;
 
     const msgId = 'msg_' + (++messageCounter);
-    const messageData = { id: msgId, room: currentRoom, message: text };
+    const messageData = { id: msgId, room: currentRoom, message: text, replyTo: replyingToMessage };
 
     socket.emit('chat-message', messageData);
-    appendMessage(msgId, text, 'sent');
+    appendMessage(msgId, text, 'sent', replyingToMessage);
+
+    cancelReply();
     chatInput.value = '';
 }
 
 socket.on('chat-message', (data) => {
-    appendMessage(data.id, data.message, 'received');
+    appendMessage(data.id, data.message, 'received', data.replyTo);
 });
 
-// Render message bubbles in the stream
-function appendMessage(msgId, text, type) {
+socket.on('message-reaction', (data) => {
+    const bubble = document.getElementById(data.msgId);
+    if (bubble) updateReactionDisplay(bubble, data.reaction);
+});
+
+// Render message bubbles in the stream with reaction menus & reply context
+function appendMessage(msgId, text, type, replyContext = null) {
     if (!messageStream) return;
 
     const messageDiv = document.createElement('div');
     messageDiv.id = msgId || ('msg_' + (++messageCounter));
-    messageDiv.className = `flex my-2 ${type === 'sent' ? 'justify-end' : 'justify-start'}`;
+    messageDiv.className = `message-bubble max-w-[75%] p-3 rounded-2xl text-sm relative group flex flex-col my-2 cursor-pointer ${
+        type === 'sent' ? 'ml-auto bg-emerald-600 text-white rounded-br-sm' : 'mr-auto bg-zinc-900 text-slate-200 border border-zinc-800 rounded-bl-sm'
+    }`;
 
-    const bubbleColor = type === 'sent' 
-        ? 'bg-emerald-600 text-white rounded-br-sm' 
-        : 'bg-zinc-900 text-slate-200 border border-zinc-800 rounded-bl-sm';
+    let replyHtml = replyContext ? `<div class="bg-black/30 border-l-2 border-white/60 px-2 py-1 mb-1 text-xs rounded text-zinc-300 italic">Replying to: "${escapeHtml(replyContext)}"</div>` : '';
 
     messageDiv.innerHTML = `
-        <div class="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${bubbleColor} shadow-md">
-            <p class="break-words">${escapeHtml(text)}</p>
+        ${replyHtml}
+        <span class="break-words">${escapeHtml(text)}</span>
+        <div class="reaction-menu ${type === 'sent' ? 'right-0' : 'left-0'}">
+            <button onclick="sendReaction('${messageDiv.id}', '❤️')">❤️</button>
+            <button onclick="sendReaction('${messageDiv.id}', '😲')">😲</button>
+            <button onclick="sendReaction('${messageDiv.id}', '☹')">☹</button>
+            <button onclick="sendReaction('${messageDiv.id}', '👌')">👌</button>
         </div>
+        <div class="reactions-container flex space-x-1 mt-1 text-xs"></div>
     `;
 
+    messageDiv.addEventListener('click', () => setReply(text));
     messageStream.appendChild(messageDiv);
     messageStream.scrollTop = messageStream.scrollHeight;
+}
+
+window.sendReaction = function(msgId, reactionEmoji) {
+    event.stopPropagation();
+    const bubble = document.getElementById(msgId);
+    if (!bubble) return;
+    updateReactionDisplay(bubble, reactionEmoji);
+    if (currentRoom) socket.emit('message-reaction', { room: currentRoom, msgId: msgId, reaction: reactionEmoji });
+};
+
+function updateReactionDisplay(bubbleElement, emoji) {
+    const container = bubbleElement.querySelector('.reactions-container');
+    if (container) container.innerHTML = `<span class="bg-zinc-950/80 px-1.5 py-0.5 rounded-full border border-zinc-800 text-[10px]">${emoji}</span>`;
+}
+
+window.setReply = function(text) {
+    replyingToMessage = text;
+    if (replyPreviewText && replyPreviewContainer) {
+        replyPreviewText.textContent = text;
+        replyPreviewContainer.classList.remove('hidden');
+    }
+    if (chatInput) chatInput.focus();
+};
+
+function cancelReply() {
+    replyingToMessage = null;
+    if (replyPreviewContainer) replyPreviewContainer.classList.add('hidden');
 }
 
 // Skip / Leave chat functions
@@ -207,7 +250,6 @@ function resetChatState() {
             </div>
         `;
     }
-    // Re-trigger finding a match automatically or prompt queue
     const nickname = localStorage.getItem('unichat_nickname') || 'Student';
     const school = localStorage.getItem('unichat_school') || 'USC';
     const isStaff = adminToggle ? adminToggle.checked : false;
@@ -226,7 +268,7 @@ function reportCurrentPartner() {
     alert('Report submitted successfully to moderators.');
 }
 
-// Admin Drawer Toggle & Data Fetching
+// Admin / Moderator Dashboard Drawer & Data Fetching
 function toggleAdminDrawer() {
     if (!adminDrawer) return;
     if (adminDrawer.style.display === 'none' || adminDrawer.style.display === '') {
@@ -244,6 +286,11 @@ async function fetchAdminDashboardData() {
         if (!res.ok) return;
         const data = await res.json();
         
+        const credentialSection = document.getElementById('adminCredentialSection');
+        if (data.role === 'admin' && credentialSection) {
+            credentialSection.classList.remove('hidden');
+        }
+
         if (adminReportList && data.reports) {
             if (data.reports.length === 0) {
                 adminReportList.innerHTML = `<div class="text-xs text-zinc-500 text-center py-4">No active reports.</div>`;
@@ -261,9 +308,26 @@ async function fetchAdminDashboardData() {
             `).join('');
         }
     } catch (e) {
-        console.error('Failed to load admin console logs', e);
+        console.error('Failed to load dashboard logs', e);
     }
 }
+
+function submitStaffUpdate() {
+    socket.emit('admin:updateStaff', {
+        adminPass: storedAdminPass,
+        targetType: document.getElementById('targetAccountSelect').value === 'admin' ? 'admin' : 'mod',
+        targetId: document.getElementById('targetAccountSelect').value,
+        newUsername: document.getElementById('newStaffUser').value.trim(),
+        newPassword: document.getElementById('newStaffPass').value.trim()
+    });
+}
+
+socket.on('admin:actionSuccess', async (msg) => {
+    alert(msg);
+    fetchAdminDashboardData();
+});
+
+socket.on('admin:actionError', (err) => alert('Error: ' + err));
 
 // Utility HTML escape to prevent injection
 function escapeHtml(text) {
