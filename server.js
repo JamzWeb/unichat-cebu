@@ -16,15 +16,15 @@ let onlineUsersCount = 0;
 let reportsList = [];
 let feedbackList = [];
 
-// STAFF ACCOUNTS
+// DYNAMIC STAFF ACCOUNTS (Master Admin & 5 Managed Moderator Slots)
 let staffAccounts = {
-    admin: { username: "JamzRieven", password: "119105" },
+    admin: { username: "Jamz", password: "119105" },
     mods: [
-        { id: 1, username: "mod_cebu1", password: "modpass111", status: "Active" },
-        { id: 2, username: "mod_cebu2", password: "modpass222", status: "Active" },
-        { id: 3, username: "mod_cebu3", password: "modpass333", status: "Active" },
-        { id: 4, username: "mod_cebu4", password: "modpass444", status: "Inactive / Open Slot" },
-        { id: 5, username: "mod_cebu5", password: "modpass555", status: "Inactive / Open Slot" }
+        { id: 1, username: "moderator1", password: "11111", status: "Active" },
+        { id: 2, username: "moderator2", password: "22222", status: "Active" },
+        { id: 3, username: "moderator3", password: "33333", status: "Active" },
+        { id: 4, username: "moderator4", password: "44444", status: "Inactive / Open Slot" },
+        { id: 5, username: "moderator5", password: "55555", status: "Inactive / Open Slot" }
     ]
 };
 
@@ -33,22 +33,6 @@ io.on('connection', (socket) => {
     io.emit('online-count-update', onlineUsersCount);
 
     socket.on('find-stranger', (userData) => {
-        if (userData.isStaff) {
-            if (userData.staffPass === staffAccounts.admin.password) {
-                userData.roleTag = '👑 ADMIN';
-            } else {
-                const foundMod = staffAccounts.mods.find(m => m.password === userData.staffPass && m.status === 'Active');
-                if (foundMod) {
-                    userData.roleTag = '📢 MOD';
-                } else {
-                    socket.emit('staff:chatError', 'Invalid staff password for chat badge!');
-                    return;
-                }
-            }
-        } else {
-            userData.roleTag = null;
-        }
-
         socket.userData = userData;
 
         if (waitingUser && waitingUser.id !== socket.id) {
@@ -60,8 +44,8 @@ io.on('connection', (socket) => {
             activeRooms.set(socket.id, roomName);
             activeRooms.set(waitingUser.id, roomName);
 
-            const stranger1 = { id: socket.id, nickname: socket.userData.nickname, school: socket.userData.school, roleTag: socket.userData.roleTag };
-            const stranger2 = { id: waitingUser.id, nickname: waitingUser.userData.nickname, school: waitingUser.userData.school, roleTag: waitingUser.userData.roleTag };
+            const stranger1 = { id: socket.id, nickname: socket.userData.nickname, school: socket.userData.school };
+            const stranger2 = { id: waitingUser.id, nickname: waitingUser.userData.nickname, school: waitingUser.userData.school };
 
             io.to(roomName).emit('matched', { room: roomName, partner1: stranger1, partner2: stranger2 });
             
@@ -76,6 +60,7 @@ io.on('connection', (socket) => {
         socket.to(data.room).emit('chat-message', data);
     });
 
+    // Handle official chat reactions
     socket.on('message-reaction', (data) => {
         socket.to(data.room).emit('message-reaction', data);
     });
@@ -99,6 +84,7 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Master Admin updating staff credentials dynamically
     socket.on('admin:updateStaff', ({ adminPass, targetType, targetId, newUsername, newPassword }) => {
         if (adminPass !== staffAccounts.admin.password) {
             return socket.emit('admin:actionError', 'Unauthorized: Incorrect Master Admin password.');
@@ -132,6 +118,7 @@ io.on('connection', (socket) => {
     });
 });
 
+// Admin & Moderator Login API
 app.get('/api/admin/data', (req, res) => {
     const password = req.query.pass;
 
@@ -159,7 +146,7 @@ app.get('/api/admin/data', (req, res) => {
         });
     }
 
-    return res.status(403).json({ error: 'Unauthorized access.' });
+    return res.status(403).json({ error: 'Unauthorized access. Invalid password or revoked slot.' });
 });
 
 function handleDisconnectOrSkip(socket) {
