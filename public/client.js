@@ -41,7 +41,7 @@ function toggleAdminPasswordBox() {
     }
 }
 
-// Handle Setup Form Submission (Bypasses school requirement if staff is checked)
+// Handle Setup Form Submission
 if (setupForm) {
     setupForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -50,8 +50,11 @@ if (setupForm) {
         const isStaff = adminToggle ? adminToggle.checked : false;
         const staffPass = adminPasswordInput ? adminPasswordInput.value.trim() : '';
         
-        // If staff, don't require school selection (auto-assign staff campus)
-        const school = isStaff ? 'Admin Staff' : (schoolSelect ? schoolSelect.value : '');
+        // Allows picking a school optionally, or defaults to Staff Office if left blank
+        let school = schoolSelect ? schoolSelect.value : '';
+        if (!school && isStaff) {
+            school = 'Admin Office';
+        }
 
         if (!nickname || (!school && !isStaff)) {
             alert('Please fill in your nickname and select your university campus.');
@@ -150,7 +153,9 @@ function sendMessage() {
     
     let userRoleTag = null;
     if (adminToggle && adminToggle.checked) {
-        userRoleTag = adminPasswordInput && adminPasswordInput.value.trim() === 'secureadminpassword' ? '👑 ADMIN' : '📢 MOD';
+        const staffPass = adminPasswordInput ? adminPasswordInput.value.trim() : '';
+        // Check if it's an admin password (matches your backend admin pass or fallback)
+        userRoleTag = (staffPass === 'admin123' || staffPass === 'secureadminpassword' || storedAdminPass === 'admin123') ? '👑 ADMIN' : '📢 MOD';
     }
     const nickname = localStorage.getItem('unichat_nickname') || 'You';
 
@@ -302,7 +307,7 @@ function resetChatState() {
         `;
     }
     const nickname = localStorage.getItem('unichat_nickname') || 'Student';
-    const school = localStorage.getItem('unichat_school') || 'USC';
+    const school = localStorage.getItem('unichat_school') || 'Admin Office';
     const isStaff = adminToggle ? adminToggle.checked : false;
     const staffPass = adminPasswordInput ? adminPasswordInput.value.trim() : '';
     
